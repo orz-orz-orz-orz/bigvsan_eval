@@ -1,8 +1,8 @@
 auraloss
-cargan
-fastdtw
 librosa
 pesq
 pysptk
+torch
 torchaudio
 tqdm
+pyworld
