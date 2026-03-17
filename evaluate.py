@@ -7,6 +7,7 @@ import math
 import numpy as np
 import os
 import pysptk
+import pyworld
 import torch
 import torchaudio as ta
 
@@ -57,7 +58,7 @@ class ScalarMetric:
         self.num_samples += 1
     
     @property
-    def average:
+    def average(self):
         return self.sum / self.num_samples
 
 
@@ -92,7 +93,7 @@ class PitchMetric:
     
     def update(self, ref_f0, syn_f0):
         # check length
-        if ref_f0.shape[0] != ref_f0.shape[1]:
+        if ref_f0.shape[0] != syn_f0.shape[0]:
             raise ValueError(f"wrong length")
         
         # get voiced frame
@@ -197,7 +198,7 @@ def evaluate_new(wav_dir, keys=[0.0]):
     
     # 找目標音檔和對應的 semi-tones
 
-    files = list(wav_dir.glob("*_ori.wav"))
+    files = list(wav_dir.glob("**/*_ori.wav"))
 
     # 參數抽取函數
     
@@ -238,16 +239,9 @@ def evaluate_new(wav_dir, keys=[0.0]):
 
 
                 if key == 0:
-                    #  STFT 部分
-                    
-                    y_g_hat_16k = resampler_16k(y_g_hat)
-
-                    y_22k = resampler_22k(y)
-                    y_g_hat_22k = resampler_22k(y_g_hat)
-
                     # MRSTFT calculation
                     _x, _y = trim(x, y)
-                    loss = loss_mrstft(_y, _x).item()
+                    loss = loss_mrstft(_y.view(1, 1, -1), _x.view(1, 1, -1)).item()
                     stft_metric.update(loss)
 
                     # PESQ
@@ -258,7 +252,7 @@ def evaluate_new(wav_dir, keys=[0.0]):
                     
                     _x, _y = trim(x_16k_i16, y_16k_i16)
 
-                    loss = pesq(16000, x_16k_short.numpy(), y_16k_short.numpy(), 'wb')
+                    loss = pesq(16000, x_16k_i16.numpy(), y_16k_i16.numpy(), 'wb')
                     pesq_metric.update(loss)
 
                     # MCD calculation
@@ -307,7 +301,7 @@ def main():
     results = {}
 
     for wav_dir in set(args.dirs):
-        result = evaluate(wav_dir, args.semitones)    
+        result = evaluate_new(wav_dir, args.keys)    
         results.append(result)
     
     print(results)

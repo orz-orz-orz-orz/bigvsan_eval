@@ -1,8 +1,11 @@
+numpy<2.0
+pesq
 auraloss
 librosa
-pesq
+torch-pesq
 pysptk
 torch
+torchcodec
 torchaudio
 tqdm
 pyworld
