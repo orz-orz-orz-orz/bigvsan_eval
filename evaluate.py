@@ -164,6 +164,8 @@ def readmgc(x):
     hop_length = 256
     # Windowing
     frames = librosa.util.frame(x, frame_length=frame_length, hop_length=hop_length).astype(np.float64).T
+    frames += np.random.randn(*frames.shape) * 0.001
+
     frames *= pysptk.blackman(frame_length)
     assert frames.shape[1] == frame_length
     # Order of mel-cepstrum
@@ -179,6 +181,21 @@ def readmgc(x):
         mgc = torch.from_numpy(mgc)
 
     return mgc
+
+def world_analysis(x):
+    is_tensor = torch.is_tensor(x)
+    if is_tensor:
+        x = x.double().numpy()
+
+    f0, timeline = pyworld.harvest(x, fs=24000, f0_floor=50, f0_ceil=1000, frame_period=5)
+    sp = pyworld.cheaptrick(x, f0, timeline, 24000, fft_size=1024)
+    mgc = pysptk.sp2mc(sp, order=25, alpha=0.466)
+
+    if is_tensor:
+        f0 = torch.from_numpy(f0)
+        mgc = torch.from_numpy(mgc)
+    
+    return f0, mgc 
 
 
 def trim(*tensors):
@@ -203,16 +220,26 @@ def evaluate_new(wav_dir, keys=[0.0]):
     # 參數抽取函數
     
     resampler_16k = ta.transforms.Resample(SR_TARGET, 16000)
-    resampler_22k = ta.transforms.Resample(SR_TARGET, 22050)
-    harvest = Harvest(SR_TARGET, hop_size=120, f0_min=60, f0_max=1000)
+    #resampler_22k = ta.transforms.Resample(SR_TARGET, 22050)
+    #harvest = Harvest(SR_TARGET, hop_size=120, f0_min=60, f0_max=1000)
     loss_mrstft = auraloss.freq.MultiResolutionSTFTLoss()
     
     # 統計的指標
     stft_metric = ScalarMetric()
-    mcd_metric = MCDMetric()
+    mcd_metrics = { key: MCDMetric() for key in keys }
     pesq_metric = ScalarMetric()
     pitch_metrics = { key: PitchMetric(log=True) for key in keys }
     
+    # 檢查檔案
+    for ori_path in files:
+        for key in keys:
+            factor = 2**(key/12)
+            filename = ori_path.stem.replace("_ori", f"_{factor:.2f}") + ".wav"
+            syn_path = ori_path.parent/filename
+            if not syn_path.exists():
+                raise FileNotFoundError(str(syn_path))
+
+
 
     with torch.inference_mode():
         iterator = tqdm(files, dynamic_ncols=True, desc=f'Evaluating {wav_dir}')
@@ -220,8 +247,8 @@ def evaluate_new(wav_dir, keys=[0.0]):
         for ori_path in iterator:
             # 讀取 wav
             x = load_wav(ori_path)
-            f0_x = harvest(x)
-            
+            #f0_x = harvest(x)
+            f0_x, mgc_x = world_analysis(x)
 
             for key in keys:
                 factor = 2**(key/12)
@@ -230,13 +257,15 @@ def evaluate_new(wav_dir, keys=[0.0]):
                 
                 # 讀取合成的音檔
                 y = load_wav(syn_path)
-                f0_y = harvest(y)
-                
+                #f0_y = harvest(y)
+                f0_y, mgc_y = world_analysis(y)
+
                 # 確保長度相同
                 _f0_x, _f0_y = trim(f0_x, f0_y)
+                _mgc_x, _mgc_y = trim(mgc_x, mgc_y)
 
                 pitch_metrics[key].update(_f0_x * factor, _f0_y)
-
+                mcd_metrics[key].update(_mgc_x, _mgc_y)
 
                 if key == 0:
                     # MRSTFT calculation
@@ -251,33 +280,39 @@ def evaluate_new(wav_dir, keys=[0.0]):
                     y_16k_i16 = (y_16k * MAX_WAV_VALUE).short()
                     
                     _x, _y = trim(x_16k_i16, y_16k_i16)
-
-                    loss = pesq(16000, x_16k_i16.numpy(), y_16k_i16.numpy(), 'wb')
-                    pesq_metric.update(loss)
+                    
+                    try:
+                        loss = pesq(16000, x_16k_i16.numpy(), y_16k_i16.numpy(), 'wb')
+                        pesq_metric.update(loss)
+                    except Exception as err:
+                        print(f"pesq error @ {syn_path}")
 
                     # MCD calculation
-                    x_22k = resampler_22k(x)
-                    y_22k = resampler_22k(y)
-                    x_22k_f64 = (x_22k * MAX_WAV_VALUE).double()
-                    y_22k_f64 = (y_22k * MAX_WAV_VALUE).double()
+                    #x_22k = resampler_22k(x)
+                    #y_22k = resampler_22k(y)
+                    #x_22k_f64 = (x_22k * MAX_WAV_VALUE).double()
+                    #y_22k_f64 = (y_22k * MAX_WAV_VALUE).double()
                     
-                    _x, _y = trim(x_22k_f64, y_22k_f64)
+                    #_x, _y = trim(x_22k_f64, y_22k_f64)
 
-                    x_mgc = readmgc(_x)
-                    y_mgc = readmgc(_y)
+                    #x_mgc = readmgc(_x)
+                    #y_mgc = readmgc(_y)
                     
-                    mcd_metric.update(x_mgc, y_mgc)
+                    #mcd_metric.update(x_mgc, y_mgc)
 
     result = {
         'STFT': stft_metric.average, 
-        'MCD': mcd_metric.mcd,
+        'MCD': {
+            f"{key:+.2f}":  mcd_metrics[key].mcd
+            for key in keys
+        },
         'PESQ': pesq_metric.average,
         'RMSE(LF0)': {
-            f"{key:+d}": pitch_metrics[key].rmse  
+            f"{key:+.2f}": pitch_metrics[key].rmse  
             for key in keys 
         },
         'F1Score(UV)': {
-            f"{key:+d}": pitch_metrics[key].f1_score
+            f"{key:+.2f}": pitch_metrics[key].f1_score
             for key in keys
         }
     }
@@ -297,16 +332,16 @@ def main():
 
     args = parser.parse_args()
     keys = list(set(args.keys))
-    
+
     results = {}
 
     for wav_dir in set(args.dirs):
         result = evaluate_new(wav_dir, args.keys)    
-        results.append(result)
+        results[str(wav_dir)] = result
     
     print(results)
 
-    if a.output_file:
+    if args.output_file:
         # Write results
         with open(args.output_file, 'w') as file:
             json.dump(results, fp=file, ensure_ascii=False, indent=2)
