@@ -12,16 +12,17 @@ pip install -r requirements.txt
 
 Then, perform an evaluation
 ```shell
-python evaluate.py <gt_dir 1> <synth_dir 1> <gt_dir 2> <synth_dir 2> ... <gt_dir N> <synth_dir N>
+python evaluate.py <dir 1> <dir 2> --keys -12 -8 -4 +0 +4 +8 +12 --output_file <output_file.json> 
 ```
-```gt_dir n``` means a directory that contains ground-truth audio files, and ```synth_dir n``` means a directory that contains synthesized audio files. Each file in ```synth_dir n``` needs to have the corresponding file that has the same name in ```gt_dir n```. Also, a corresponding pair needs to be time-aligned in advance.
+```dir n``` means a directory that contains ground-truth audio files with filename like ```<filename>_ori.wav``` and the corresponding synthesized audio files like ```<filename>_<keyshift>.wav```. The ground-truth audio files should be put in the same directory side-by-side.
 
-```evaluate.py``` will output calculated metrics for each ```gt_dir n```-```synth_dir n``` pair and the macro averages of them across all pairs. It will take some time to complete an evaluation.
+```evaluate.py``` will output calculated metrics for each ```dir n```. One could also save the result as json file with ```--output_file <filename.json>``` option.
+
 
 ## Supported evaluation metrics
 This toolbox supports the following metrics:
 
-- M-STFT: Multi-resolution short-term Fourier transform
+- M-STFT: Multi-resolution short-term Fourier transform 
 - PESQ: Perceptual evaluation of speech quality
 - MCD: Mel-cepstral distortion
 - Periodicity: Periodicity error
