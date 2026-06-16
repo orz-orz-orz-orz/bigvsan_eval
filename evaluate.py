@@ -336,8 +336,9 @@ def main():
     results = {}
 
     for wav_dir in set(args.dirs):
-        result = evaluate_new(wav_dir, args.keys)    
+        result = evaluate_new(wav_dir, args.keys)
         results[str(wav_dir)] = result
+        print(f"finish {wav_dir}\nresult:\n{result}")
     
     print(results)
 
