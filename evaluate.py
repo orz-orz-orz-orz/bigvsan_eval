@@ -134,6 +134,10 @@ class PitchMetric:
     def recall(self):
         return self.tp/(self.tp + self.fn)
 
+    @property
+    def accuracy(self):
+        return (self.tp + self.tn)/(self.tp + self.tn + self.fp + self.fn)
+
 
 
 def load_wav(full_path):
@@ -313,6 +317,10 @@ def evaluate_new(wav_dir, keys=[0.0]):
         },
         'F1Score(UV)': {
             f"{key:+.2f}": pitch_metrics[key].f1_score
+            for key in keys
+        },
+        'Accuracy(UV)': {
+            f"{key:+.2f}": pitch_metrics[key].accuracy
             for key in keys
         }
     }
