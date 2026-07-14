@@ -104,7 +104,7 @@ class PitchMetric:
         self.tp += (ref_v_mask & syn_v_mask).sum().item()
         self.fp += (~ref_v_mask & syn_v_mask).sum().item()
         self.tn += (~ref_v_mask & ~syn_v_mask).sum().item()
-        self.fn += (ref_v_mask & syn_v_mask).sum().item()
+        self.fn += (ref_v_mask & ~syn_v_mask).sum().item()
 
         # select the true positive and calculate the sse
         tp_mask = (ref_v_mask & syn_v_mask)
