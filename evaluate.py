@@ -280,13 +280,13 @@ def evaluate_new(wav_dir, keys=[0.0]):
                     # PESQ
                     x_16k = resampler_16k(x)
                     y_16k = resampler_16k(y)
-                    x_16k_i16 = (x_16k * MAX_WAV_VALUE).short()
-                    y_16k_i16 = (y_16k * MAX_WAV_VALUE).short()
+                    x_16k_i16 = (x_16k * MAX_WAV_VALUE).clamp(-32768, 32767).short()
+                    y_16k_i16 = (y_16k * MAX_WAV_VALUE).clamp(-32768, 32767).short()
                     
                     _x, _y = trim(x_16k_i16, y_16k_i16)
                     
                     try:
-                        loss = pesq(16000, x_16k_i16.numpy(), y_16k_i16.numpy(), 'wb')
+                        loss = pesq(16000, _x.numpy(), _y.numpy(), 'wb')
                         pesq_metric.update(loss)
                     except Exception as err:
                         print(f"pesq error @ {syn_path}")
